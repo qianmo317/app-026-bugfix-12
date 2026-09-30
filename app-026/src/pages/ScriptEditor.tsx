@@ -3,6 +3,12 @@ import { Link, navigate } from '../router'
 import { useScript } from '../state/hooks'
 import { parseScriptText } from '../engine/parse'
 import { makeCue, cueLabel } from '../engine/cues'
+import {
+  normalizeSegments,
+  removeLineFromSegments,
+  insertLineIntoSegment,
+  splitSegmentAtLine,
+} from '../engine/segments'
 import { MARK_DEFS, KIND_LABELS } from '../constants'
 import * as repo from '../storage/repo'
 import type { Cue, Line } from '../types'
@@ -61,33 +67,34 @@ export function ScriptEditor({ id }: { id: string }) {
 
   const deleteLine = (idx: number) => {
     mutate((s) => {
+      const line = s.lines[idx]
       const lines = s.lines.slice()
       lines.splice(idx, 1)
-      return { ...s, lines }
+      // 从句属段移除该句；段被删空则整段消失
+      const segments = normalizeSegments(lines, removeLineFromSegments(s.segments, line.id))
+      return { ...s, lines, segments }
     })
   }
 
   const insertLineAfter = (idx: number) => {
     mutate((s) => {
+      const anchor = s.lines[idx]
       const nid = `l_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
       const nl: Line = { id: nid, text: '', cues: [], marks: [] }
       const lines = s.lines.slice()
       lines.splice(idx + 1, 0, nl)
-      return { ...s, lines }
+      // 新句落入锚句所在段、紧贴锚句之后；旧数据若有孤儿句，一并归一化
+      const segments = normalizeSegments(lines, insertLineIntoSegment(s.segments, anchor.id, nid))
+      return { ...s, lines, segments }
     })
   }
 
   const splitSegmentAt = (idx: number) => {
     mutate((s) => {
-      const cut = s.lines.slice(idx).map((l) => l.id)
-      const head = s.lines.slice(0, idx).map((l) => l.id)
-      const first = s.segments[0]
-      const newSeg = {
-        id: `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-        title: `第${s.segments.length + 1}段`,
-        lineIds: cut,
-      }
-      return { ...s, segments: [{ ...first, lineIds: head }, newSeg] }
+      const line = s.lines[idx]
+      // 只剪开该行所属的段：前半留在原段（保留段名与循环勾选），该行起另立新段
+      const segments = splitSegmentAtLine(s.segments, line.id)
+      return { ...s, segments: normalizeSegments(s.lines, segments) }
     })
   }
 

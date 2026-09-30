@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Line, PromptSettings, Script } from '../types'
 import { ScrollEngine, attachDriver } from '../engine/scroller'
 import { lineHoldSeconds, lineHoldLabel } from '../engine/cues'
+import { normalizeSegments, segmentsDiffer } from '../engine/segments'
 import * as repo from '../storage/repo'
 
 /** 简易异步加载 hook */
@@ -53,7 +54,25 @@ export function useScript(id: string | undefined) {
   useEffect(() => {
     if (!id) return
     setScript(null)
-    repo.getScript(id).then((s) => setScript(s ?? null))
+    // 加载即归一化段/句归属，修复旧版本留下的悬空 id、孤儿句与段顺序错乱
+    repo.getScript(id).then((s) => {
+      if (!s) {
+        setScript(s ?? null)
+        return
+      }
+      const segments = normalizeSegments(s.lines, s.segments)
+      if (segmentsDiffer(segments, s.segments)) {
+        const next = { ...s, segments }
+        setScript(next)
+        window.clearTimeout(timer.current)
+        setSaved(false)
+        timer.current = window.setTimeout(() => {
+          repo.saveScript(next).then(() => setSaved(true))
+        }, 400)
+      } else {
+        setScript(s)
+      }
+    })
   }, [id])
 
   const mutate = useCallback((fn: (s: Script) => Script) => {

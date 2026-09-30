@@ -213,3 +213,6 @@ type Script = { id: string; title: string; troupe?: string; lines: Line[]; segme
 type PromptSettings = { fontSizePx: number; autoFit: boolean; autoScroll: boolean; speedPxPerSec: number;
                         theme: 'dark'|'light'|'highContrast'; holdOnCue: boolean; lockStage: boolean };
 ```
+
+> 不变量：`segments[].lineIds` 与 `lines` 始终对齐——每个行 id 恰好属于一个段、段内顺序与行序一致。
+> 编辑页的删行/插行/剪段都经 `engine/segments.ts` 的 `removeLineFromSegments` / `insertLineIntoSegments` / `splitSegmentAtLine` 同步维护（删行出段、新行落段、剪段只动被剪的段）。

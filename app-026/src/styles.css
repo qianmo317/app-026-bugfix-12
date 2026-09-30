@@ -217,6 +217,8 @@ input[type='number'] { width: 56px; padding: 2px 4px; }
 .line-ops { display: flex; gap: 4px; }
 .op { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; }
 .op:hover { color: var(--fg); }
+.op:disabled { opacity: 0.35; cursor: not-allowed; }
+.op:disabled:hover { color: var(--muted); }
 .op-danger:hover { color: var(--danger); border-color: var(--danger); }
 .editor-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
 

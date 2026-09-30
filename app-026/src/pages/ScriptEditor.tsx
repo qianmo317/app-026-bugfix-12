@@ -3,6 +3,7 @@ import { Link, navigate } from '../router'
 import { useScript } from '../state/hooks'
 import { parseScriptText } from '../engine/parse'
 import { makeCue, cueLabel } from '../engine/cues'
+import { removeLineFromSegments, insertLineIntoSegments, splitSegmentAtLine } from '../engine/segments'
 import { MARK_DEFS, KIND_LABELS } from '../constants'
 import * as repo from '../storage/repo'
 import type { Cue, Line } from '../types'
@@ -62,8 +63,9 @@ export function ScriptEditor({ id }: { id: string }) {
   const deleteLine = (idx: number) => {
     mutate((s) => {
       const lines = s.lines.slice()
-      lines.splice(idx, 1)
-      return { ...s, lines }
+      const [victim] = lines.splice(idx, 1)
+      // 同步把该行移出所在段（段被掏空则整段移除），否则段头锚点悬空、句数虚高
+      return { ...s, lines, segments: removeLineFromSegments(s.segments, victim.id) }
     })
   }
 
@@ -73,21 +75,16 @@ export function ScriptEditor({ id }: { id: string }) {
       const nl: Line = { id: nid, text: '', cues: [], marks: [] }
       const lines = s.lines.slice()
       lines.splice(idx + 1, 0, nl)
-      return { ...s, lines }
+      // 新行落进 anchor 所在的段，否则打印漏行、跳段把它跳过去
+      return { ...s, lines, segments: insertLineIntoSegments(s.segments, s.lines, nid, s.lines[idx]?.id) }
     })
   }
 
   const splitSegmentAt = (idx: number) => {
     mutate((s) => {
-      const cut = s.lines.slice(idx).map((l) => l.id)
-      const head = s.lines.slice(0, idx).map((l) => l.id)
-      const first = s.segments[0]
-      const newSeg = {
-        id: `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-        title: `第${s.segments.length + 1}段`,
-        lineIds: cut,
-      }
-      return { ...s, segments: [{ ...first, lineIds: head }, newSeg] }
+      // 只剪该行所在的段，其余段原样保留
+      const segments = splitSegmentAtLine(s.segments, s.lines[idx].id)
+      return segments === s.segments ? s : { ...s, segments }
     })
   }
 
@@ -264,7 +261,12 @@ export function ScriptEditor({ id }: { id: string }) {
                   />
                   <div className="line-ops">
                     <button className="op" title="下一行前插入" onClick={() => insertLineAfter(idx)}>＋</button>
-                    <button className="op" title="从此行分为新唱段" onClick={() => splitSegmentAt(idx)}>✂</button>
+                    <button
+                      className="op"
+                      title={si === undefined || segStart ? '段首行无需再分' : '从此行分为新唱段'}
+                      disabled={si === undefined || segStart}
+                      onClick={() => splitSegmentAt(idx)}
+                    >✂</button>
                     <button className="op op-danger" title="删除本行" onClick={() => deleteLine(idx)}>✕</button>
                   </div>
                 </div>

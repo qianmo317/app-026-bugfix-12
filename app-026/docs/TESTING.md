@@ -6,7 +6,7 @@
 ## 1. 测试体系总览
 
 ```
-单元测试 (vitest, 41 例)      → 引擎/解析/存储/协议的确定性断言
+单元测试 (vitest, 54 例)      → 引擎/解析/存储/协议的确定性断言
         ↓
 E2E (Playwright, 6 组 spec)   → 真实浏览器全旅程与性能
         ↓
@@ -25,13 +25,14 @@ npx playwright test tests/e2e/journey.spec.ts    # 单个 spec
 npx playwright test --headed      # 有头模式观察执行
 ```
 
-## 2. 单元测试（tests/unit/，41 例全绿）
+## 2. 单元测试（tests/unit/，54 例全绿）
 
 | 文件 | 环境 | 覆盖点 |
 |---|---|---|
 | `scroller.test.ts` | node | 60/120fps 每秒滚过行数一致；混合帧率位移守恒；5s 过门停留 **±100ms**；`skipHold` 立即恢复；`holdOnCue=false` 不停留；单段循环 10 次位置/耗时符合预期；循环圈内标记重触发；`seekTo` 后停留重新生效；播完 `ended` |
 | `autofit.test.ts` | node | mulberry32 生成 200 条随机长度唱词：100% 不换行 + 字号尽可能大 + 极窄容器钳制最小字号 |
 | `parse.test.ts` | node | 「角色：唱词」解析（前缀 ≤6 字）；【过门N】【停顿N】【锣鼓】【注：x】（label 落点）；`##` 段头；空行分段；空过门行补占位 |
+| `segments.test.ts` | node | 编辑一致性：删行出段（段空则整段移除、段头锚点迁移）；插行落段（段末归前段、孤儿 anchor 就近挂靠、无段新建）；剪段只动被剪段（段首不剪、其余段引用不变）；删/插/剪序列后「每行恰好属一个段 + 段区间无缝覆盖全部行」 |
 | `virtual.test.ts` | node | 可视窗口计算边界（首/尾/越界/窗口收缩） |
 | `keys.test.ts` | jsdom | 默认键位表；自定义持久化；损坏 JSON 回退默认；localStorage 不可用时内存回退（vi.stubGlobal） |
 | `db.test.ts` | node | fake-indexeddb：四 store 建库、get/put/delete/getAll；设置保存读取往返（含 savedAt 剥离与默认值合并） |
@@ -87,6 +88,7 @@ npx playwright test --headed      # 有头模式观察执行
 | 3 | 设置修改后立即刷新/关页会丢失（E2E：排练页字号仍是自动值 94） | IndexedDB 写入在页面卸载时不可靠 + 300ms 防抖窗口 | 改为**无防抖**：localStorage 同步直写 + IndexedDB 双写，读侧 `savedAt` 取新合并（`repo.ts`） |
 | 4 | 按一次 `↑` 速度 +20（E2E：期望 100 实得 110） | `changeSpeed` 在 `setSpeed(speed+10)` 后又 `patch({speedPxPerSec: engine.speedValue + d})` 多加一次 `d`，设置同步回引擎放大 | `Prompt.tsx` / `Stage.tsx`：patch 改为 `engine.speedValue`（已是调速后值） |
 | 5 | 循环练习计数记到**下一段**的行（E2E：徽标不出现） | `indexAt()` 四舍五入使 pos ≥ 3.5×行高时 idx 已越界到下一段 → `onLoopIteration` 闭包捕获错误段索引 | `Prompt.tsx`：开启循环时把本段 `lineIds` 存入 `loopLineIdsRef`，回调直接使用（见架构 D5） |
+| 6 | 编辑页删/插/剪行后唱段错乱：删段首句段头整块消失；段中插句打印漏行、跳段被跳过；中间剪段把前后段全并掉、段名变自动编号 | 三个编辑操作只改 `lines` 不维护 `segments[].lineIds`（删行留悬空 id、插行成孤儿、剪段把全文重排成两段） | `engine/segments.ts` 新增 `removeLineFromSegments` / `insertLineIntoSegments` / `splitSegmentAtLine` 三个纯函数，`ScriptEditor.tsx` 全部接入；段首行 ✂ 置灰 |
 
 > 复盘：#3/#4/#5 均由 E2E 在真实浏览器中暴露，静态审查与单元测试未覆盖——**「写完单测不等于功能正确」**；#1 由浏览器点测诊断脚本抓到 console error 定位。
 
